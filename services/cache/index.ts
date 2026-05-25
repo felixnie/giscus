@@ -10,20 +10,33 @@ import {
 } from './supabase';
 
 interface TokenCacheClient {
-  get(installationId: number): Promise<string>;
+  get(installationId: number): Promise<InstallationAccessToken | null>;
   set(token: InstallationAccessToken): Promise<boolean>;
 }
 
+const INTOLERANCE_TIMEOUT = 1000 * 60 * 5; // 5 minutes
+
 function getTokenCacheClient(): TokenCacheClient {
+  let get: (installationId: number) => Promise<InstallationAccessToken | null>;
+  let set: (token: InstallationAccessToken) => Promise<boolean>;
   if (env.postgrest_url && env.postgrest_role && env.postgrest_secret) {
-    return {
-      get: postgrestGet,
-      set: postgrestSet,
-    };
+    get = postgrestGet;
+    set = postgrestSet;
+  } else {
+    get = supabaseGet;
+    set = supabaseSet;
   }
+
   return {
-    get: supabaseGet,
-    set: supabaseSet,
+    get: async (installationId: number) => {
+      const record = await get(installationId);
+      if (!record) return null;
+      const expiresAt = new Date(record.expires_at).getTime();
+      const now = new Date().getTime();
+      if (expiresAt - now < INTOLERANCE_TIMEOUT) return { ...record, token: '' };
+      return record;
+    },
+    set,
   };
 }
 
