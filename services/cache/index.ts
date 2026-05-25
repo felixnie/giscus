@@ -8,6 +8,7 @@ import {
   getCachedAccessToken as supabaseGet,
   setCachedAccessToken as supabaseSet,
 } from './supabase';
+import { getCachedAccessToken as valkeyGet, setCachedAccessToken as valkeySet } from './valkey';
 
 interface TokenCacheClient {
   get(installationId: number): Promise<InstallationAccessToken | null>;
@@ -19,7 +20,10 @@ const INTOLERANCE_TIMEOUT = 1000 * 60 * 5; // 5 minutes
 function getTokenCacheClient(): TokenCacheClient {
   let get: (installationId: number) => Promise<InstallationAccessToken | null>;
   let set: (token: InstallationAccessToken) => Promise<boolean>;
-  if (env.postgrest_url && env.postgrest_role && env.postgrest_secret) {
+  if (env.valkey_url) {
+    get = valkeyGet;
+    set = valkeySet;
+  } else if (env.postgrest_url && env.postgrest_role && env.postgrest_secret) {
     get = postgrestGet;
     set = postgrestSet;
   } else {
